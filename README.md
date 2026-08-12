@@ -41,6 +41,24 @@ python main.py console
 python main.py voice
 ```
 
+## 2b. Deploy live on Vercel (free)
+
+The repo ships with `vercel.json` + `api/index.py` and is already live at:
+
+> **https://voice-agent-os.vercel.app**  (FastAPI docs: `/docs`)
+
+```bash
+npx vercel deploy --prod \
+  --env NVIDIA_API_KEY=your-key \
+  --env PROVIDER_LLM=nvidia \
+  --env API_ADMIN_KEY=your-admin-key
+```
+
+> **Serverless notes:** SQLite lives in ephemeral `/tmp` on Vercel, so data resets
+> on cold starts. For a production multitenant service, swap `storage/db.py` for a
+> hosted Postgres. Long-running telephony (Twilio media streams) works best on a
+> VPS/Render/Railway instead of serverless.
+
 ## 3. Try it in 30 seconds
 
 ```bash
@@ -182,6 +200,19 @@ TWILIO_AUTH_TOKEN=...
 TWILIO_FROM_NUMBER=+1XXXXXXXXXX
 ```
 
+**Best LLM models for voice (measured on a real NVIDIA key):**
+
+| Model | Latency | Verdict |
+|---|---|---|
+| `minimaxai/minimax-m3` | ~0.7s | ✅ **Default - use this for voice agents** |
+| `z-ai/glm-5.2` | ~95s | Powerful but too slow for phone calls; use for offline planning |
+| `meta/llama-3.3-70b-instruct` | slow cold start | fine for non-realtime work |
+
+> Set `NVIDIA_LLM_MODEL` in `.env` to switch. If NVIDIA rate-limits (429) or is
+> down, `ResilientLLM` automatically degrades to the offline mock brain so a call
+> never dies mid-conversation. NVIDIA **free keys** allow only a few calls per
+> minute — buy paid credits (NGC) before selling to clients.
+
 Real phone calls use the **TwiML `<Gather input="speech">` loop**: the API serves NVIDIA-generated TTS audio (`/api/v1/calls/{id}/twiml` → `/api/v1/tts`) and feeds caller speech back into the agent's LLM (`/api/v1/calls/{id}/turn`). Point Twilio's webhook at your public URL.
 
 ## 7. Tests
@@ -202,3 +233,47 @@ This OS treats that repo as the **agent catalogue**: the `agents/catalog/` team
 (support, researcher, summarizer) is adapted from `13-customer-support-agent`,
 `01-web-research-agent` and `06-news-summarizer-agent`, but any of the 500 agents
 can be registered the same way — as a self-contained prompt + shared LLM runtime.
+
+---
+
+## 9. Handing it to clients (the selling playbook)
+
+You sell **access**, not code. Each client is a tenant with their own API key:
+
+1. **Create the client** (you, as admin)
+   ```bash
+   curl -X POST https://voice-agent-os.vercel.app/api/v1/clients \
+     -H "X-Admin-Key: change-me-admin-key" -H "Content-Type: application/json" \
+     -d '{"name":"Acme Corp","email":"billing@acme.com","plan":"pro"}'
+   ```
+   Response contains `api_key` (e.g. `vaos_...`). That key is the client's whole
+   world — they never see your NVIDIA key, your Twilio key, or your admin key.
+
+2. **Send the client this one-pager** (client works with ONLY their API key):
+   ```bash
+   # list / create their voice agents
+   curl -H "X-Api-Key: vaos_..." https://voice-agent-os.vercel.app/api/v1/agents
+
+   # create a support bot
+   curl -X POST https://voice-agent-os.vercel.app/api/v1/agents \
+     -H "X-Api-Key: vaos_..." -H "Content-Type: application/json" \
+     -d '{"name":"Support Bot","system_prompt":"You answer product questions."}'
+
+   # make it call someone
+   curl -X POST https://voice-agent-os.vercel.app/api/v1/calls \
+     -H "X-Api-Key: vaos_..." -H "Content-Type: application/json" \
+     -d '{"agent_id":"ag_...","to_number":"+15550100"}'
+
+   # check usage + their bill
+   curl -H "X-Api-Key: vaos_..." https://voice-agent-os.vercel.app/api/v1/clients/me
+   ```
+
+3. **Charge them** — the usage report already returns `estimated_bill`
+   (price per minute depends on plan). Invoice monthly.
+
+4. **Scale safety** — each client is rate-limited by their plan
+   (`monthly_minutes`, `max_agents` in `marketplace/billing.py`). Bump a plan,
+   their limits go up automatically.
+
+5. **White-label** — rename the product (logo, agent names, voice) and sell the
+   same OS to unlimited clients. Data is already isolated per tenant.
