@@ -4,7 +4,7 @@
     {
       "src": "api/index.py",
       "use": "@vercel/python",
-      "config": { "includeFiles": ["**/*.py"] }
+      "config": { "includeFiles": ["**/*.py", "web/index.html"] }
     }
   ],
   "routes": [

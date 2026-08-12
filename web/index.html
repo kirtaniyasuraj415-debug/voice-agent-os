@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Voice Agent OS — Control Center</title>
+<style>
+  :root {
+    --bg: #0b0f1a; --panel: #111827; --panel2: #0f1626;
+    --line: #1f2a44; --txt: #e5e9f4; --mut: #8b94ad;
+    --acc: #22d3ee; --acc2: #818cf8; --ok: #34d399; --warn: #fbbf24; --err: #f87171;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: radial-gradient(1200px 600px at 80% -10%, #1a2b55 0%, var(--bg) 55%);
+    color: var(--txt); font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    min-height: 100vh; padding: 0 16px 80px;
+  }
+  header { max-width: 1180px; margin: 0 auto; padding: 22px 0 14px; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+  .logo { width: 40px; height: 40px; border-radius: 10px; background: linear-gradient(135deg, var(--acc), var(--acc2)); display: grid; place-items: center; font-weight: 800; color: #0b0f1a; }
+  h1 { font-size: 18px; letter-spacing: .5px; }
+  h1 small { color: var(--mut); font-weight: 400; }
+  .spacer { flex: 1; }
+  .pill { font-size: 12px; padding: 5px 12px; border-radius: 999px; border: 1px solid var(--line); color: var(--mut); background: var(--panel); }
+  .pill.on { color: var(--ok); border-color: var(--ok); }
+  nav { max-width: 1180px; margin: 0 auto 18px; display: flex; gap: 8px; flex-wrap: wrap; }
+  nav button {
+    background: var(--panel); color: var(--mut); border: 1px solid var(--line);
+    padding: 8px 16px; border-radius: 10px; cursor: pointer; font: inherit; font-size: 13px;
+  }
+  nav button.active { color: #0b0f1a; background: linear-gradient(135deg, var(--acc), var(--acc2)); border-color: transparent; font-weight: 700; }
+  main { max-width: 1180px; margin: 0 auto; display: grid; grid-template-columns: 1fr; gap: 18px; }
+  .view { display: none; }
+  .view.active { display: grid; gap: 18px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 18px; }
+  .card h3 { font-size: 13px; letter-spacing: 1px; text-transform: uppercase; color: var(--mut); margin-bottom: 14px; }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  input, select, textarea {
+    background: var(--panel2); border: 1px solid var(--line); color: var(--txt);
+    border-radius: 9px; padding: 9px 12px; font: inherit; font-size: 13px; width: 100%;
+  }
+  input:focus, textarea:focus, select:focus { outline: 1px solid var(--acc); }
+  .lbl { font-size: 11px; color: var(--mut); margin: 10px 0 4px; }
+  button.btn {
+    background: linear-gradient(135deg, var(--acc), var(--acc2)); color: #0b0f1a;
+    border: none; padding: 9px 16px; border-radius: 9px; font: inherit; font-weight: 700; cursor: pointer;
+  }
+  button.btn.ghost { background: var(--panel2); color: var(--txt); border: 1px solid var(--line); font-weight: 400; }
+  button.btn.danger { background: var(--err); }
+  button.btn.sm { padding: 5px 10px; font-size: 12px; }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--mut); font-weight: 600; }
+  .tag { font-size: 11px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--mut); }
+  .tag.ok { color: var(--ok); border-color: var(--ok); }
+  .tag.warn { color: var(--warn); border-color: var(--warn); }
+  .tag.err { color: var(--err); border-color: var(--err); }
+  .code { background: var(--panel2); border: 1px solid var(--line); border-radius: 9px; padding: 10px 12px; font-size: 12.5px; white-space: pre-wrap; word-break: break-word; }
+  .chat { display: flex; flex-direction: column; gap: 10px; max-height: 420px; overflow: auto; }
+  .bubble { max-width: 80%; padding: 10px 14px; border-radius: 12px; font-size: 13.5px; line-height: 1.45; }
+  .bubble.u { align-self: flex-end; background: linear-gradient(135deg, var(--acc), var(--acc2)); color: #0b0f1a; }
+  .bubble.n { align-self: flex-start; background: var(--panel2); border: 1px solid var(--line); }
+  .bubble small { display: block; color: var(--mut); margin-bottom: 3px; font-size: 10.5px; letter-spacing: .5px; }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+  .stat { background: var(--panel2); border: 1px solid var(--line); border-radius: 11px; padding: 14px; }
+  .stat b { font-size: 24px; display: block; }
+  .stat span { font-size: 11px; color: var(--mut); text-transform: uppercase; letter-spacing: .5px; }
+  .muted { color: var(--mut); font-size: 12px; }
+  .flash { padding: 10px 12px; border-radius: 9px; font-size: 12.5px; margin-top: 10px; display: none; }
+  .flash.show { display: block; }
+  .flash.ok { background: #052e22; border: 1px solid var(--ok); color: var(--ok); }
+  .flash.err { background: #3b0f14; border: 1px solid var(--err); color: var(--err); }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  @media (max-width: 800px) { .grid2 { grid-template-columns: 1fr; } }
+  details { border: 1px solid var(--line); border-radius: 9px; padding: 8px 12px; margin-top: 8px; }
+  summary { cursor: pointer; font-size: 12.5px; color: var(--acc); }
+  .keybox { display: flex; gap: 8px; }
+  .keybox input { flex: 1; }
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">V</div>
+  <h1>Voice Agent OS <small>— Control Center</small></h1>
+  <div class="spacer"></div>
+  <span id="livePill" class="pill">checking…</span>
+</header>
+
+<nav>
+  <button class="active" data-view="commander">🎙️ Nova</button>
+  <button data-view="agents">🤖 Agents</button>
+  <button data-view="calls">📞 Calls</button>
+  <button data-view="clients">💳 Clients</button>
+  <button data-view="system">🖥️ System</button>
+</nav>
+
+<main>
+  <!-- ============ COMMANDER ============ -->
+  <section class="view active" id="view-commander">
+    <div class="grid2">
+      <div class="card">
+        <h3>Talk to Nova (voice commander)</h3>
+        <p class="muted" style="margin-bottom:12px">"Baaton-baaton mein control" — bolkar agent banao, call karo, reports lo.</p>
+        <div class="chat" id="chat"></div>
+        <div class="row" style="margin-top:12px">
+          <input id="cmdInput" placeholder='e.g. "create agent named sales"  |  "system status"  |  "help"' />
+          <button class="btn" onclick="sendCommand()">Send</button>
+          <button class="btn ghost" onclick="chatPlay()">🔊 TTS</button>
+        </div>
+        <div class="flash" id="cmdFlash"></div>
+      </div>
+      <div class="card">
+        <h3>Quick actions</h3>
+        <p class="lbl">Voice agent ka naam</p>
+        <input id="qaAgentName" value="sales" />
+        <div class="row" style="margin-top:12px">
+          <button class="btn" onclick="qaCreateAgent()">Create agent</button>
+          <button class="btn ghost" onclick="qaCall()">Call +15550100</button>
+          <button class="btn ghost" onclick="qaReport()">Client report</button>
+        </div>
+        <h3 style="margin-top:22px">API access</h3>
+        <div class="keybox">
+          <input id="adminKey" placeholder="Admin key (X-Admin-Key)" value="change-me-admin-key" />
+          <button class="btn ghost sm" onclick="saveKey()">Save</button>
+        </div>
+        <p class="muted" style="margin-top:8px">Key browser me save hota hai — sirf aapke paas. Client keys alag se clients tab me.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ AGENTS ============ -->
+  <section class="view" id="view-agents">
+    <div class="grid2">
+      <div class="card">
+        <h3>Create voice agent</h3>
+        <div class="lbl">Name</div>
+        <input id="agName" placeholder="Support Bot" />
+        <div class="lbl">System prompt (agent ki personality)</div>
+        <textarea id="agPrompt" rows="4" placeholder="You are a friendly support agent. Answer in under 25 words.">You are a helpful voice assistant on a phone call. Keep replies short, friendly and conversational.</textarea>
+        <div class="lbl">Voice</div>
+        <select id="agVoice">
+          <option>English-US.Male</option>
+          <option>English-US.Female-1</option>
+          <option>English-US.Female-2</option>
+          <option>English-UK.Male</option>
+        </select>
+        <button class="btn" style="margin-top:14px" onclick="createAgent()">Create agent</button>
+        <div class="flash" id="agFlash"></div>
+      </div>
+      <div class="card">
+        <h3>Voice agents</h3>
+        <div class="code" id="agList" style="min-height:180px">loading…</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ CALLS ============ -->
+  <section class="view" id="view-calls">
+    <div class="grid2">
+      <div class="card">
+        <h3>Place a call</h3>
+        <div class="lbl">Voice agent</div>
+        <select id="callAgent"></select>
+        <div class="lbl">Phone number</div>
+        <input id="callNumber" value="+15550100" />
+        <button class="btn" style="margin-top:14px" onclick="placeCall()">☎️ Place call</button>
+        <div class="flash" id="callFlash"></div>
+      </div>
+      <div class="card">
+        <h3>Recent calls</h3>
+        <div class="code" id="callList" style="min-height:180px">loading…</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ CLIENTS ============ -->
+  <section class="view" id="view-clients">
+    <div class="grid2">
+      <div class="card">
+        <h3>Add client (sell karo)</h3>
+        <div class="lbl">Client name</div>
+        <input id="clName" placeholder="Acme Corp" />
+        <div class="lbl">Email</div>
+        <input id="clEmail" placeholder="billing@acme.com" />
+        <div class="lbl">Plan</div>
+        <select id="clPlan">
+          <option value="starter">Starter — 100 min / $0.05</option>
+          <option value="pro" selected>Pro — 1000 min / $0.03</option>
+          <option value="enterprise">Enterprise — 10000 min / $0.02</option>
+        </select>
+        <button class="btn" style="margin-top:14px" onclick="addClient()">Create client + API key</button>
+        <div class="flash" id="clFlash"></div>
+      </div>
+      <div class="card">
+        <h3>Clients & usage</h3>
+        <div class="code" id="clList" style="min-height:180px">loading…</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ SYSTEM ============ -->
+  <section class="view" id="view-system">
+    <div class="card">
+      <h3>System status</h3>
+      <div class="stats" id="sysStats">loading…</div>
+    </div>
+    <div class="card">
+      <h3>Live log / event stream</h3>
+      <div class="code" id="sysRaw" style="max-height:300px; overflow:auto">…</div>
+    </div>
+  </section>
+</main>
+
+<script>
+const API = ""; // same origin
+let adminKey = localStorage.getItem("vaos_admin_key") || "change-me-admin-key";
+let chatLog = [];
+document.getElementById("adminKey").value = adminKey;
+
+function hd() { return { "X-Admin-Key": adminKey, "Content-Type": "application/json" }; }
+function flash(el, msg, ok) {
+  const f = document.getElementById(el);
+  f.className = "flash show " + (ok ? "ok" : "err");
+  f.textContent = msg;
+  setTimeout(() => (f.className = "flash"), 4000);
+}
+async function api(path, opts = {}) {
+  const r = await fetch(API + path, { ...opts, headers: hd() });
+  const t = await r.text();
+  let data;
+  try { data = JSON.parse(t); } catch { data = t; }
+  if (!r.ok) throw new Error((data && data.detail) || t || r.status);
+  return data;
+}
+function fmt(v) { return JSON.stringify(v, null, 1); }
+function saveKey() { adminKey = document.getElementById("adminKey").value.trim(); localStorage.setItem("vaos_admin_key", adminKey); flash("cmdFlash", "Admin key saved locally", true); }
+
+/* ---------- tabs ---------- */
+document.querySelectorAll("nav button").forEach(b => b.onclick = () => {
+  document.querySelectorAll("nav button").forEach(x => x.classList.remove("active"));
+  document.querySelectorAll(".view").forEach(x => x.classList.remove("active"));
+  b.classList.add("active");
+  document.getElementById("view-" + b.dataset.view).classList.add("active");
+});
+
+/* ---------- commander ---------- */
+function addBubble(speaker, text) {
+  const c = document.getElementById("chat");
+  const d = document.createElement("div");
+  d.className = "bubble " + (speaker === "you" ? "u" : "n");
+  const small = document.createElement("small");
+  small.textContent = speaker === "you" ? "YOU" : "NOVA";
+  d.appendChild(small);
+  d.appendChild(document.createTextNode(text));
+  c.appendChild(d);
+  c.scrollTop = c.scrollHeight;
+}
+async function sendCommand() {
+  const inp = document.getElementById("cmdInput");
+  const text = inp.value.trim();
+  if (!text) return;
+  inp.value = "";
+  addBubble("you", text);
+  try {
+    const r = await api("/api/v1/assistant/command", { method: "POST", body: JSON.stringify({ text }) });
+    chatLog.push(r.reply);
+    addBubble("nova", r.reply);
+  } catch (e) { addBubble("nova", "⚠️ " + e.message); }
+}
+async function chatPlay() {
+  const last = chatLog[chatLog.length - 1];
+  if (!last) return flash("cmdFlash", "Pehle kuch pucho (Send dabao)", false);
+  const wav = await fetch("/api/v1/system/tts?text=" + encodeURIComponent(last), { headers: hd() });
+  const blob = await wav.blob();
+  new Audio(URL.createObjectURL(blob)).play();
+}
+async function qaCreateAgent() { await createAgent(document.getElementById("qaAgentName").value); switchView("agents"); }
+async function qaCall() { await placeCall(); switchView("calls"); }
+async function qaReport() { await loadClients(); switchView("clients"); }
+function switchView(name) { document.querySelector(`nav button[data-view="${name}"]`).click(); }
+
+/* ---------- agents ---------- */
+async function createAgent(name) {
+  const nm = name || document.getElementById("agName").value.trim();
+  const prompt = document.getElementById("agPrompt").value.trim();
+  const voice = document.getElementById("agVoice").value;
+  if (!nm) return flash("agFlash", "Name chahiye", false);
+  try {
+    const r = await api("/api/v1/agents", { method: "POST", body: JSON.stringify({ name: nm, system_prompt: prompt, voice }) });
+    flash("agFlash", "✅ Agent '" + r.name + "' created (" + r.id + ")", true);
+    loadAgents();
+    document.getElementById("agName").value = "";
+  } catch (e) { flash("agFlash", e.message, false); }
+}
+async function loadAgents() {
+  const el = document.getElementById("agList");
+  try {
+    const list = await api("/api/v1/agents");
+    el.innerHTML = list.length ? "" : "<i class='muted'>koi agent nahi — upar banao.</i>";
+    list.forEach(a => {
+      const st = a.status === "active" ? "<span class='tag ok'>active</span>" : "<span class='tag err'>" + a.status + "</span>";
+      el.insertAdjacentHTML("beforeend",
+        "<details><summary>" + esc(a.name) + " " + st + " <span class='muted'>" + a.id + "</span></summary>" +
+        "<p class='muted'>" + esc(a.system_prompt || "") + "</p>" +
+        "<div class='row' style='margin-top:8px'>" +
+        "<button class='btn sm ghost' onclick='agentStart(\"" + a.id + "\")'>start</button>" +
+        "<button class='btn sm ghost' onclick='agentStop(\"" + a.id + "\")'>stop</button>" +
+        "<button class='btn sm ghost' onclick='agentUse(\"" + a.id + "\")'>call</button>" +
+        "</div></details>");
+    });
+    fillCallAgents(list);
+  } catch (e) { el.textContent = "⚠️ " + e.message; }
+}
+async function agentStart(id) { try { await api("/api/v1/agents/" + id + "/start", { method: "POST" }); loadAgents(); } catch (e) { alert(e.message); } }
+async function agentStop(id) { try { await api("/api/v1/agents/" + id + "/stop", { method: "POST" }); loadAgents(); } catch (e) { alert(e.message); } }
+function agentUse(id) { document.getElementById("callAgent").value = id; switchView("calls"); }
+function fillCallAgents(list) {
+  const s = document.getElementById("callAgent");
+  const cur = s.value;
+  s.innerHTML = list.map(a => "<option value='" + a.id + "'>" + esc(a.name) + " (" + a.id + ")</option>").join("");
+  if (cur) s.value = cur;
+}
+
+/* ---------- calls ---------- */
+async function placeCall() {
+  const agent_id = document.getElementById("callAgent").value;
+  const to_number = document.getElementById("callNumber").value.trim();
+  if (!agent_id) return flash("callFlash", "Pehle agent banao", false);
+  flash("callFlash", "Call chalu… (mock mode me kuch seconds)", true);
+  try {
+    const c = await api("/api/v1/calls", { method: "POST", body: JSON.stringify({ agent_id, to_number }) });
+    const turns = (c.transcript || []).map(t => "  [" + t.speaker + "] " + t.text).join("\n");
+    flash("callFlash", "✅ " + c.status + " · " + (c.transcript || []).length + " turns · " + c.duration_seconds + "s\n" + turns, c.status === "completed");
+    loadCalls();
+  } catch (e) { flash("callFlash", e.message, false); }
+}
+async function loadCalls() {
+  const el = document.getElementById("callList");
+  try {
+    const list = await api("/api/v1/calls?limit=8");
+    el.innerHTML = list.length ? "" : "<i class='muted'>abhi koi call nahi.</i>";
+    list.forEach(c => {
+      const st = c.status === "completed" ? "<span class='tag ok'>done</span>" : "<span class='tag warn'>" + c.status + "</span>";
+      const tr = (c.transcript || []).map(t => t.speaker + ": " + t.text).join("\n");
+      el.insertAdjacentHTML("beforeend",
+        "<details><summary>" + esc(c.to_number) + " " + st + " <span class='muted'>" + c.duration_seconds + "s</span></summary>" +
+        "<pre class='muted' style='white-space:pre-wrap'>" + esc(tr) + "</pre></details>");
+    });
+  } catch (e) { el.textContent = "⚠️ " + e.message; }
+}
+
+/* ---------- clients ---------- */
+async function addClient() {
+  const name = document.getElementById("clName").value.trim();
+  const email = document.getElementById("clEmail").value.trim() || name + "@client.com";
+  const plan = document.getElementById("clPlan").value;
+  if (!name) return flash("clFlash", "Client ka naam chahiye", false);
+  try {
+    const c = await api("/api/v1/clients", { method: "POST", body: JSON.stringify({ name, email, plan }) });
+    flash("clFlash", "✅ Client ban gaya!\nAPI key (client ko yahi do): " + c.api_key, true);
+    loadClients();
+  } catch (e) { flash("clFlash", e.message, false); }
+}
+async function loadClients() {
+  const el = document.getElementById("clList");
+  try {
+    const list = await api("/api/v1/clients");
+    el.innerHTML = list.length ? "" : "<i class='muted'>koi client nahi — upar add karo.</i>";
+    for (const c of list) {
+      let usage = {};
+      try { usage = await api("/api/v1/clients/" + c.id + "/usage"); } catch {}
+      el.insertAdjacentHTML("beforeend",
+        "<details><summary>" + esc(c.name) + " <span class='tag'>" + c.plan + "</span> <span class='muted'>" + esc(c.email) + "</span></summary>" +
+        "<p class='muted'>minutes: " + (usage.minutes_used ?? "?") + " / " + (usage.monthly_limit_minutes ?? "?") + " · bill ≈ $" + (usage.estimated_bill ?? "?") + "</p>" +
+        "<p class='code' style='margin-top:6px'>API KEY: " + esc(c.api_key) + "</p></details>");
+    }
+  } catch (e) { el.textContent = "⚠️ " + e.message; }
+}
+
+/* ---------- system ---------- */
+async function loadSystem() {
+  try {
+    const s = await api("/api/v1/system/status");
+    document.getElementById("sysStats").innerHTML =
+      stat("running", s.running_agents) + stat("voice agents", s.voice_agents) +
+      stat("clients", s.clients) + stat("active calls", s.active_calls) +
+      stat("LLM", s.providers.llm) + stat("telephony", s.telephony.provider || "mock");
+    document.getElementById("livePill").className = "pill on";
+    document.getElementById("livePill").textContent = "● live · " + s.providers.llm + "/" + (s.telephony.provider || "mock");
+    document.getElementById("sysRaw").textContent = fmt(s);
+  } catch (e) {
+    document.getElementById("livePill").textContent = "offline";
+    document.getElementById("sysRaw").textContent = "⚠️ " + e.message;
+  }
+}
+function stat(label, val) { return "<div class='stat'><b>" + val + "</b><span>" + label + "</span></div>"; }
+function esc(s) { return (s || "").replace(/[&<>"']/g, m => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[m])); }
+
+document.getElementById("cmdInput").addEventListener("keydown", e => { if (e.key === "Enter") sendCommand(); });
+document.getElementById("agName").addEventListener("keydown", e => { if (e.key === "Enter") createAgent(); });
+
+function boot() {
+  addBubble("nova", "Namaste 👋 Main Nova hoon — aapka voice commander. Bolo: create agent named sales, call, system status ya help.");
+  loadSystem(); loadAgents(); loadCalls(); loadClients();
+}
+boot();
+</script>
+</body>
+</html>

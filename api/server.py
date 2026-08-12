@@ -3,8 +3,10 @@ from __future__ import annotations
 
 import logging
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
+from fastapi.responses import HTMLResponse
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 
@@ -16,6 +18,8 @@ from api.routes import (  # noqa: E402
     voice_router,
 )
 from core.config import settings  # noqa: E402
+
+WEB_DIR = Path(__file__).resolve().parent.parent / "web"
 
 
 @asynccontextmanager
@@ -44,19 +48,14 @@ def create_app() -> FastAPI:
     app.include_router(system_router, prefix="/api/v1")
     app.include_router(voice_router, prefix="/api/v1")
 
-    @app.get("/")
-    def root():
-        return {
-            "name": "Voice Agent OS",
-            "docs": "/docs",
-            "endpoints": {
-                "agents": "/api/v1/agents",
-                "calls": "/api/v1/calls",
-                "clients": "/api/v1/clients",
-                "system": "/api/v1/system/status",
-                "assistant": "/api/v1/assistant/command",
-            },
-        }
+    @app.get("/", response_class=HTMLResponse, include_in_schema=False)
+    def dashboard():
+        html = (WEB_DIR / "index.html").read_text(encoding="utf-8")
+        return HTMLResponse(html)
+
+    @app.get("/health", include_in_schema=False)
+    def health():
+        return {"status": "ok"}
 
     return app
 
