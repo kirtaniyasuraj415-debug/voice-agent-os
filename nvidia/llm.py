@@ -1,18 +1,44 @@
-"""LLM providers: NVIDIA NIM / AI Endpoints and offline mock."""
+"""LLM providers: NVIDIA NIM / AI Endpoints and offline mock.
+
+Uses the OpenAI SDK pointed at NVIDIA's OpenAI-compatible endpoint
+(https://integrate.api.nvidia.com/v1). Streaming + tool-friendly.
+"""
 from __future__ import annotations
 
 import logging
+import time
 
-import httpx
+from openai import OpenAI
 
 from core.config import settings
 from nvidia.base import ChatMessage, LLMProvider
 
 log = logging.getLogger("vaos.nvidia.llm")
 
+MAX_RETRIES = 3
+BACKOFF_SECONDS = 2.0
+
+
+def _with_retry(fn, *, retries: int = MAX_RETRIES):
+    """Retry transient failures (429 rate limits, 5xx) with backoff."""
+    last_error: Exception | None = None
+    for attempt in range(retries):
+        try:
+            return fn()
+        except Exception as exc:  # noqa: BLE001 - need to inspect status
+            last_error = exc
+            status = getattr(exc, "status_code", None)
+            if status in (429, 500, 502, 503, 504):
+                wait = BACKOFF_SECONDS * (2**attempt)
+                log.warning("nvidia llm transient error %s, retrying in %.1fs", status, wait)
+                time.sleep(wait)
+                continue
+            raise
+    raise last_error
+
 
 class NvidiaLLM(LLMProvider):
-    """OpenAI-compatible NVIDIA NIM / AI Endpoints chat model."""
+    """Chat model served by NVIDIA NIM / AI Endpoints via the OpenAI SDK."""
 
     name = "nvidia"
 
@@ -21,12 +47,14 @@ class NvidiaLLM(LLMProvider):
         api_key: str | None = None,
         base_url: str | None = None,
         model: str | None = None,
+        timeout: float = 120.0,
     ) -> None:
         self.api_key = api_key or settings.nvidia_api_key
         self.base_url = (base_url or settings.nvidia_llm_base_url).rstrip("/")
         self.model = model or settings.nvidia_llm_model
         if not self.api_key:
             raise ValueError("NVIDIA_API_KEY is required for NvidiaLLM")
+        self._client = OpenAI(api_key=self.api_key, base_url=self.base_url, timeout=timeout)
 
     def chat(
         self,
@@ -34,25 +62,36 @@ class NvidiaLLM(LLMProvider):
         temperature: float = 0.3,
         max_tokens: int = 512,
     ) -> str:
-        payload = {
-            "model": self.model,
-            "messages": [{"role": m.role, "content": m.content} for m in messages],
-            "temperature": temperature,
-            "max_tokens": max_tokens,
-        }
-        headers = {
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json",
-        }
-        resp = httpx.post(
-            f"{self.base_url}/chat/completions",
-            json=payload,
-            headers=headers,
-            timeout=60,
+        payload = [{"role": m.role, "content": m.content} for m in messages]
+
+        def _call() -> str:
+            resp = self._client.chat.completions.create(
+                model=self.model,
+                messages=payload,
+                temperature=temperature,
+                max_tokens=max_tokens,
+            )
+            return (resp.choices[0].message.content or "").strip()
+
+        return _with_retry(_call)
+
+    def chat_stream(self, messages: list[ChatMessage], max_tokens: int = 512):
+        """Yield reply text chunks as they arrive (low latency voice)."""
+        payload = [{"role": m.role, "content": m.content} for m in messages]
+        stream = self._client.chat.completions.create(
+            model=self.model,
+            messages=payload,
+            max_tokens=max_tokens,
+            stream=True,
         )
-        resp.raise_for_status()
-        data = resp.json()
-        return data["choices"][0]["message"]["content"].strip()
+        for chunk in stream:
+            if not getattr(chunk, "choices", None):
+                continue
+            if len(chunk.choices) == 0 or getattr(chunk.choices[0], "delta", None) is None:
+                continue
+            content = getattr(chunk.choices[0].delta, "content", None)
+            if content:
+                yield content
 
 
 class MockLLM(LLMProvider):

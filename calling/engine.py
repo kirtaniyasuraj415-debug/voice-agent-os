@@ -84,7 +84,7 @@ class CallEngine:
             self.add_turn(call, "caller", line)
             reply = runtime.respond(line)
             self.add_turn(call, "agent", reply)
-            time.sleep(0.4)
+            time.sleep(1.2)
 
         return self.complete(call)
 

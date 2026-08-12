@@ -28,7 +28,7 @@ class Settings(BaseSettings):
 
     # NVIDIA endpoints
     nvidia_llm_base_url: str = "https://integrate.api.nvidia.com/v1"
-    nvidia_llm_model: str = "meta/llama-3.3-70b-instruct"
+    nvidia_llm_model: str = "minimaxai/minimax-m3"
     nvidia_riva_url: str = "https://riva.api.nvidia.com"
     nvidia_asr_language: str = "en-US"
     nvidia_tts_voice: str = "English-US.Male"

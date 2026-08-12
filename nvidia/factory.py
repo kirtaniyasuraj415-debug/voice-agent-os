@@ -5,11 +5,33 @@ import logging
 
 from core.config import settings
 from nvidia.asr import MockASR, RivaASR
-from nvidia.base import ASRProvider, LLMProvider, TTSProvider
+from nvidia.base import ASRProvider, ChatMessage, LLMProvider, TTSProvider
 from nvidia.llm import MockLLM, NvidiaLLM
 from nvidia.tts import MockTTS, RivaTTS
 
 log = logging.getLogger("vaos.nvidia.factory")
+
+
+class ResilientLLM(LLMProvider):
+    """Wraps the NVIDIA LLM: if it keeps failing (rate limits, downtime),
+    degrade to the mock brain so the OS never dies mid-conversation."""
+
+    name = "nvidia"
+
+    def __init__(self, llm: NvidiaLLM) -> None:
+        self.primary = llm
+        self.fallback = MockLLM()
+        self.downgraded = False
+
+    def chat(self, messages: list[ChatMessage], temperature: float = 0.3, max_tokens: int = 512) -> str:
+        try:
+            reply = self.primary.chat(messages, temperature=temperature, max_tokens=max_tokens)
+            self.downgraded = False
+            return reply
+        except Exception as exc:  # noqa: BLE001
+            log.error("nvidia llm failed (%s); using mock fallback", exc)
+            self.downgraded = True
+            return self.fallback.chat(messages, temperature=temperature, max_tokens=max_tokens)
 
 
 def build_llm() -> LLMProvider:
@@ -17,7 +39,7 @@ def build_llm() -> LLMProvider:
         if not settings.has_nvidia_key:
             log.warning("provider_llm=nvidia but NVIDIA_API_KEY is empty; falling back to mock")
             return MockLLM()
-        return NvidiaLLM()
+        return ResilientLLM(NvidiaLLM())
     return MockLLM()
 
 
