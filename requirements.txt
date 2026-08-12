@@ -1,0 +1,17 @@
+fastapi>=0.111
+uvicorn[standard]>=0.30
+pydantic>=2.7
+pydantic-settings>=2.2
+httpx>=0.27
+openai>=1.35
+python-dotenv>=1.0
+PyYAML>=6.0
+pytest>=8.0
+pytest-asyncio>=0.23
+
+# Voice capture/playback (optional on dev machines)
+sounddevice>=0.4
+numpy>=1.26
+
+# NVIDIA Riva cloud ASR/TTS (optional; mock fallback works without)
+nvidia-riva-client>=2.16

@@ -1,0 +1,24 @@
+# Secrets - NEVER commit these
+.env
+*.env
+!*.env.example
+
+# Virtualenv / python
+.venv/
+__pycache__/
+*.pyc
+
+# Runtime data (SQLite DB, recordings)
+data/
+audio_samples/*.wav
+
+# Test / tooling caches
+.pytest_cache/
+.coverage
+htmlcov/
+
+# OS files
+.DS_Store
+
+# Vercel / build artifacts
+.vercel/
