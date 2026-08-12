@@ -22,3 +22,5 @@ htmlcov/
 
 # Vercel / build artifacts
 .vercel/
+.vercel
+.env*

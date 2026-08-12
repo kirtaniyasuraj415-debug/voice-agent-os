@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import tempfile
 import threading
 from pathlib import Path
 
@@ -10,12 +11,30 @@ from core.config import settings
 from core.models import AgentStatus, Call, CallStatus, Client, Subscription, VoiceAgent
 
 
+def _writable_path(path: str | Path) -> Path:
+    """Return the configured DB path if writable, else fall back to a temp dir.
+
+    Serverless runtimes (Vercel) mount the code bundle read-only at
+    /var/task, so SQLite must live in the ephemeral /tmp instead.
+    """
+    candidate = Path(path)
+    try:
+        candidate.parent.mkdir(parents=True, exist_ok=True)
+        probe = candidate.parent / ".vaos_write_probe"
+        probe.touch(exist_ok=True)
+        probe.unlink()
+        return candidate
+    except OSError:
+        fallback = Path(tempfile.gettempdir()) / "vaos.db"
+        fallback.parent.mkdir(parents=True, exist_ok=True)
+        return fallback
+
+
 class Database:
     """Thin, thread-safe SQLite wrapper using JSON columns for flexibility."""
 
     def __init__(self, path: str | None = None) -> None:
-        self.path = Path(path or settings.db_path)
-        self.path.parent.mkdir(parents=True, exist_ok=True)
+        self.path = _writable_path(path or settings.db_path)
         self._lock = threading.RLock()
         self._conn = sqlite3.connect(str(self.path), check_same_thread=False)
         self._conn.row_factory = sqlite3.Row

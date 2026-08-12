@@ -1,0 +1,9 @@
+# Never ship these to Vercel
+.env
+*.env
+.venv/
+data/
+tests/
+audio_samples/
+.pytest_cache/
+.git/
