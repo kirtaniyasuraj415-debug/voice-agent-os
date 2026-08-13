@@ -110,6 +110,26 @@ class AgentManager:
             self._team[key] = agent
             registry.register(agent)  # type: ignore[arg-type]
         bus.publish("team.booted", {"team": TEAM_NAMES})
+        self.ensure_demo_agents()
+
+    def ensure_demo_agents(self) -> None:
+        """Seed a few ready voice agents on serverless cold boots.
+
+        Vercel instances get an ephemeral /tmp DB, so a freshly woken
+        instance may have no agents yet. Guarantee callable ones always
+        exist so the dashboard is useful on first open.
+        """
+        if db.list_agents():
+            return
+        demos = [
+            ("sales", "You are a sales agent. Pitch the product in 2 short lines, then ask if they want a demo call."),
+            ("support", "You are a support agent. Answer politely and resolve the customer issue in 2 short lines."),
+            ("consultant", "You are a consultant. Give a crisp, useful answer and ask one follow-up question."),
+        ]
+        for name, prompt in demos:
+            self.create_agent(name=name, system_prompt=prompt)
+        for record in self.list_agents():
+            self.start_voice_agent(record.id)
 
     def get_team_agent(self, key: str):
         return self._team.get(key)
